@@ -12,8 +12,24 @@ module Passify
     
     desc "link", "Creates an application from the current working directory"
     def link(name = nil)
-      name = pwd if name.nil? || name.empty?
-      
+      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
+      sudome
+      name = urlify(File.basename(pwd)) if name.nil? || name.empty?
+      url = "#{name}.local"
+      app_config = <<-eos
+  # passify: Begin #{url}
+    <VirtualHost *:80>
+      ServerName suedseetraum.local
+      DocumentRoot "#{pwd}"
+      RackEnv development
+      <Directory "#{pwd}/public">
+        Order allow,deny
+        Allow from all
+      </Directory>
+    </VirtualHost>
+  # passify: End #{url}
+        eos
+        insert_into_file APACHE_CONF, app_config, :after => "  # passify: Begin application configuration\n"
     end
     
     desc "install", "Installs passify into the local Apache installation"
@@ -31,16 +47,18 @@ module Passify
   <VirtualHost *:80>
     ServerName _default_
   </VirtualHost>
-# passify: Begin application configuration
+  # passify: Begin application configuration
 </IfModule>
 # passify: End configuration
         eos
+      system("apachectl graceful > /dev/null 2>&1")
+      say "The installation of passify is complete."
     end
     
     private
-      # http://jimeh.me/blog/2010/02/22/built-in-sudo-for-ruby-command-line-tools/
+      # http://jimeh.me/blog/2010/02/22/built-in-sudo-for-ruby-command-line-tools/      
       def sudome
-        exec("sudo #{ENV['_']} #{ARGV.join(' ')}") if ENV["USER"] != "root"
+        exec("#{sudo_command} #{ENV['_']} #{ARGV.join(' ')}") if ENV["USER"] != "root"
       end
       
       def passify_installed?
@@ -51,8 +69,16 @@ module Passify
         system("grep 'PassengerRuby' #{APACHE_CONF} > /dev/null 2>&1")
       end
       
+      def sudo_command
+        rvm_installed? ? 'rvmsudo' : 'sudo'
+      end
+
+      def rvm_installed?
+        system("which rvm > /dev/null 2>&1")
+      end
+      
       def pwd
-        urlify(File.basename(Dir.pwd))
+        @pwd ||= Dir.pwd
       end
 
       def urlify(name)

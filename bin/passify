@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require 'thor'
+require 'passify/cli'
+
+Passify::CLI.start

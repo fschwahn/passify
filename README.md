@@ -1,0 +1,2 @@
+# passify
+`passify` is a command line interface (CLI) for [Passenger](http://www.modrails.com/), equivalent to what [powder](https://github.com/Rodreegez/powder) and [powify](https://github.com/sethvargo/powify) are for [pow](http://pow.cx/). I used the [PassengerPane](https://github.com/Fingertips/passengerpane), however I wanted the simplicity and speed of a CLI for that task.

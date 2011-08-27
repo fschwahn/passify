@@ -7,9 +7,9 @@ Gem::Specification.new do |s|
   s.version     = Passify::VERSION
   s.authors     = ["Fabian Schwahn"]
   s.email       = ["fabian.schwahn@gmail.com"]
-  s.homepage    = ""
-  s.summary     = %q{Write a gem summary}
-  s.description = %q{Write a gem description}
+  s.homepage    = "https://github.com/fschwahn/passify"
+  s.summary     = %q{PassengerPane-compatible CLI for Phusion Passenger}
+  s.description = %q{passify is a command line interface (CLI) for Phusion Passenger, equivalent to what powder and powify are for pow. passify is compatible with PassengerPane.}
 
   s.rubyforge_project = "passify"
 

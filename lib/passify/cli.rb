@@ -6,7 +6,6 @@ module Passify
   class CLI < Thor
     include Thor::Actions
     
-    HOSTS_FILE = '/etc/hosts'
     APACHE_CONF = '/etc/apache2/httpd.conf'
     VHOSTS_DIR = '/private/etc/apache2/passenger_pane_vhosts'
 
@@ -16,21 +15,21 @@ module Passify
       error("This directory can not be served with Passenger. Please create a `config.ru`-file.") unless is_valid_app?
       name = File.basename(pwd) if name.nil? || name.empty?
       name = urlify(name)
-      url = "#{name}.local"
-      if app_exists?(url)
-        if is_same_app?(url, pwd)
-          notice("This directory is already being served from http://#{url}. Run `passify open #{name}` to view it.")
+      host = "#{name}.local"
+      if app_exists?(host)
+        if is_same_app?(host, pwd)
+          notice("This directory is already being served from http://#{host}. Run `passify open #{name}` to view it.")
         else
-          exit if no?("A different app already exists with under http://#{url}. Do you want to overwrite it?")
+          exit if no?("A different app already exists with under http://#{host}. Do you want to overwrite it?")
           remove(name)
         end
       end
       
       sudome
-      create_vhost(url, pwd)
-      append_to_file HOSTS_FILE, "\n127.0.0.1 #{url}" unless has_hosts_entry?(url)
+      create_vhost(host, pwd)
+      register_host(host)
       system("apachectl graceful > /dev/null 2>&1")
-      say "The application was successfully set up and can be reached from http://#{url} . Run `passify open #{name}` to view it."
+      say "The application was successfully set up and can be reached from http://#{host} . Run `passify open #{name}` to view it."
     end
     
     desc "remove", "Removes an existing link to the current working directory."
@@ -38,11 +37,11 @@ module Passify
       error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
       name = File.basename(pwd) if name.nil? || name.empty?
       name = urlify(name)
-      url = "#{name}.local"
-      notice("No application exists under http://#{url} .") unless app_exists?(url)
+      host = "#{name}.local"
+      notice("No application exists under http://#{host} .") unless app_exists?(host)
       sudome
-      remove_file(vhost_file(url))
-      system("sed -i '' '#{get_hosts_line(url)}d' #{HOSTS_FILE}") if has_hosts_entry?(url)
+      remove_file(vhost_file(host))
+      unregister_host(host)
     end
     
     desc "install", "Installs passify into the local Apache installation."
@@ -85,10 +84,11 @@ module Passify
     desc "list", "Lists all applications served with passify."
     def list
       error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
-      apps = `grep 'passify: Begin --' #{APACHE_CONF}`.split("\n")
-      apps.each do |app|
-        url = app.match(/-- (.+)$/)[0][3..-1]
-        say "  #{url} --> #{directory_for_url(url)}"
+      Dir.foreach(VHOSTS_DIR) do |entry|
+        if File.file?("#{VHOSTS_DIR}/#{entry}")
+          host = entry[0..-12]
+          say "  #{host} --> #{directory_for_host(host)}"
+        end
       end
     end
     
@@ -97,8 +97,8 @@ module Passify
       error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
       name = File.basename(pwd) if name.nil? || name.empty?
       name = urlify(name)
-      url = "#{name}.local"
-      system("open http://#{url}")
+      host = "#{name}.local"
+      system("open http://#{host}")
     end
     
     desc "version", "Shows the version"
@@ -144,24 +144,16 @@ module Passify
         system("grep 'RAILS_GEM_VERSION' config/environment.rb > /dev/null 2>&1")
       end
       
-      def app_exists?(url)
-        File.exists?(vhost_file(url))
+      def app_exists?(host)
+        File.exists?(vhost_file(host))
       end
       
-      def is_same_app?(url, dir)
-        directory_for_url(url) == dir
+      def is_same_app?(host, dir)
+        directory_for_host(host) == dir
       end
       
-      def directory_for_url(url)
-        `grep 'DocumentRoot' #{vhost_file(url)}`.scan(/"([^"]*)"/).flatten[0][0..-8]
-      end
-      
-      def has_hosts_entry?(url)
-        !!get_hosts_line(url)
-      end
-      
-      def get_hosts_line(url)
-        `grep -n '#{url}' #{HOSTS_FILE}`.split(":").first
+      def directory_for_host(host)
+        `grep 'DocumentRoot' #{vhost_file(host)}`.scan(/"([^"]*)"/).flatten[0][0..-8]
       end
       
       def find_line_in_conf(pattern)
@@ -186,10 +178,10 @@ module Passify
         exit
       end
       
-      def create_vhost(url, path)
-        create_file vhost_file(url), <<-eos
+      def create_vhost(host, path)
+        create_file vhost_file(host), <<-eos
 <VirtualHost *:80>
-  ServerName #{url}
+  ServerName #{host}
   DocumentRoot "#{path}/public"
   RackEnv development
   <Directory "#{path}/public">
@@ -200,8 +192,16 @@ module Passify
           eos
       end
       
-      def vhost_file(url)
-        "#{VHOSTS_DIR}/#{url}.vhost.conf"
+      def vhost_file(host)
+        "#{VHOSTS_DIR}/#{host}.vhost.conf"
+      end
+      
+      def register_host(host)
+        system("/usr/bin/dscl localhost -create /Local/Default/Hosts/#{host} IPAddress 127.0.0.1 > /dev/null 2>&1")
+      end
+      
+      def unregister_host(host)
+        system("/usr/bin/dscl localhost -delete /Local/Default/Hosts/#{host} > /dev/null 2>&1")
       end
       
   end

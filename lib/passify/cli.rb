@@ -8,9 +8,10 @@ module Passify
     
     HOSTS_FILE = '/etc/hosts'
     APACHE_CONF = '/etc/apache2/httpd.conf'
+    VHOSTS_DIR = '/private/etc/apache2/passenger_pane_vhosts'
 
-    desc "link", "Creates an application from the current working directory."
-    def link(name = nil)
+    desc "add", "Creates an application from the current working directory."
+    def add(name = nil)
       error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
       error("This directory can not be served with Passenger. Please create a `config.ru`-file.") unless is_valid_app?
       name = File.basename(pwd) if name.nil? || name.empty?
@@ -21,39 +22,27 @@ module Passify
           notice("This directory is already being served from http://#{url}. Run `passify open #{name}` to view it.")
         else
           exit if no?("A different app already exists with under http://#{url}. Do you want to overwrite it?")
-          unlink(name)
+          remove(name)
         end
       end
       
       sudome
-      app_config = <<-eos
-  # passify: Begin -- #{url}
-    <VirtualHost *:80>
-      ServerName #{url}
-      DocumentRoot "#{pwd}/public"
-      RackEnv development
-      <Directory "#{pwd}/public">
-        Allow from all
-        Options -MultiViews
-      </Directory>
-    </VirtualHost>
-  # passify: End -- #{url}
-        eos
-      insert_into_file APACHE_CONF, app_config, :after => "  # passify: Begin application configuration\n"
+      create_vhost(url, pwd)
       append_to_file HOSTS_FILE, "\n127.0.0.1 #{url}" unless has_hosts_entry?(url)
       system("apachectl graceful > /dev/null 2>&1")
       say "The application was successfully set up and can be reached from http://#{url} . Run `passify open #{name}` to view it."
     end
     
-    desc "unlink", "Removes an existing link to the current working directory."
-    def unlink(name = nil)
+    desc "remove", "Removes an existing link to the current working directory."
+    def remove(name = nil)
       error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
       name = File.basename(pwd) if name.nil? || name.empty?
       name = urlify(name)
       url = "#{name}.local"
       notice("No application exists under http://#{url} .") unless app_exists?(url)
       sudome
-      system("sed -i '' '#{find_begin(url)},#{find_end(url)}d' #{APACHE_CONF}")
+      remove_file(vhost_file(url))
+      system("sed -i '' '#{get_hosts_line(url)}d' #{HOSTS_FILE}") if has_hosts_entry?(url)
     end
     
     desc "install", "Installs passify into the local Apache installation."
@@ -62,16 +51,16 @@ module Passify
       notice("passify is already installed.") if passify_installed?
       sudome
       append_to_file APACHE_CONF, <<-eos
-\n\n# passify: Begin configuration
-# Do not alter any of the following comments as they are used by passify to find the right lines.
+\n\n# Added by the Passenger preference pane
+# Make sure to include the Passenger configuration (the LoadModule,
+# PassengerRoot, and PassengerRuby directives) before this section.
 <IfModule passenger_module>
   NameVirtualHost *:80
   <VirtualHost *:80>
     ServerName _default_
   </VirtualHost>
-  # passify: Begin application configuration
+  Include /private/etc/apache2/passenger_pane_vhosts/*.conf
 </IfModule>
-# passify: End configuration
         eos
       system("apachectl graceful > /dev/null 2>&1")
       say "The installation of passify is complete."
@@ -81,13 +70,14 @@ module Passify
     def uninstall
       notice("passify is not installed.") unless passify_installed?
       sudome
-      system("sed -i '' '#{find_line('passify: Begin configuration')},#{find_line('passify: End configuration')}d' #{APACHE_CONF}")
-      say "The uninstallation of passify is complete."
+      first_config_line = find_line_in_conf('# Added by the Passenger preference pane').to_i
+      system("sed -i '' '#{first_config_line},#{first_config_line+9}d' #{APACHE_CONF}")
+      say "The uninstallation of passify is complete. The vhosts in `#{VHOSTS_DIR}` have not been deleted."
     end
     
     desc "restart", "Restart the current application"
     def restart
-      notice("The current directory does not seem to be a rack application.") unless is_rack_app?
+      notice("The current directory does not seem to be a passenger application.") unless is_valid_app?
       FileUtils.mkdir_p('tmp')
       system "touch tmp/restart.txt"
     end
@@ -122,14 +112,6 @@ module Passify
         exec("#{sudo_command} #{ENV['_']} #{ARGV.join(' ')}") if ENV["USER"] != "root"
       end
       
-      def passify_installed?
-        system("grep 'passify: Begin configuration' #{APACHE_CONF} > /dev/null 2>&1")
-      end
-      
-      def passenger_installed?
-        system("grep 'PassengerRuby' #{APACHE_CONF} > /dev/null 2>&1")
-      end
-      
       def sudo_command
         rvm_installed? ? 'rvmsudo' : 'sudo'
       end
@@ -138,17 +120,17 @@ module Passify
         system("which rvm > /dev/null 2>&1")
       end
       
+      def passify_installed?
+        system("grep 'Include \\/private\\/etc\\/apache2\\/passenger_pane_vhosts\\/\\*\\.conf' #{APACHE_CONF} > /dev/null 2>&1")
+      end
+      
+      def passenger_installed?
+        system("grep 'PassengerRuby' #{APACHE_CONF} > /dev/null 2>&1")
+      end
+      
       def is_valid_app?
-        if is_rack_app?
+        if is_rack_app? || is_rails2_app?
           true
-        elsif is_rails2_app? || is_radiant_app?
-          say "This appears to be a Rails 2.x application. You need a `config.ru`-file."
-          if(yes? "Do you want to autogenerate a basic `config.ru`-file?")
-            create_file 'config.ru', "require File.dirname(__FILE__) + '/config/environment'\nrun ActionController::Dispatcher.new"
-            true
-          else
-            false
-          end
         else
           false
         end
@@ -162,12 +144,8 @@ module Passify
         system("grep 'RAILS_GEM_VERSION' config/environment.rb > /dev/null 2>&1")
       end
       
-      def is_radiant_app?
-        system("grep 'Radiant::Initializer' config/environment.rb > /dev/null 2>&1")
-      end
-      
       def app_exists?(url)
-        system("grep 'passify: Begin -- #{url}' #{APACHE_CONF} > /dev/null 2>&1")
+        File.exists?(vhost_file(url))
       end
       
       def is_same_app?(url, dir)
@@ -175,22 +153,18 @@ module Passify
       end
       
       def directory_for_url(url)
-        `grep -A 3 'passify: Begin -- #{url}' #{APACHE_CONF}`.split("\n").last.match(/\".+\"/)[0][1..-9]
+        `grep 'DocumentRoot' #{vhost_file(url)}`.scan(/"([^"]*)"/).flatten[0][0..-8]
       end
       
       def has_hosts_entry?(url)
-        system("grep '#{url}' #{HOSTS_FILE} > /dev/null 2>&1")
+        !!get_hosts_line(url)
       end
       
-      def find_begin(url)
-        find_line("passify: Begin -- #{url}")
+      def get_hosts_line(url)
+        `grep -n '#{url}' #{HOSTS_FILE}`.split(":").first
       end
       
-      def find_end(url)
-        find_line("passify: End -- #{url}")
-      end
-      
-      def find_line(pattern)
+      def find_line_in_conf(pattern)
         `grep -n '#{pattern}' #{APACHE_CONF}`.split(":").first
       end
       
@@ -210,6 +184,24 @@ module Passify
       def notice(message)
         say message, :yellow
         exit
+      end
+      
+      def create_vhost(url, path)
+        create_file vhost_file(url), <<-eos
+<VirtualHost *:80>
+  ServerName #{url}
+  DocumentRoot "#{path}/public"
+  RackEnv development
+  <Directory "#{path}/public">
+    Allow from all
+    Options -MultiViews
+  </Directory>
+</VirtualHost>
+          eos
+      end
+      
+      def vhost_file(url)
+        "#{VHOSTS_DIR}/#{url}.vhost.conf"
       end
       
   end

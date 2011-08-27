@@ -1,5 +1,6 @@
 require 'rubygems'
 require 'thor'
+require 'passify/version'
 
 module Passify
   class CLI < Thor

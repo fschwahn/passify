@@ -62,6 +62,7 @@ module Passify
 </IfModule>
         eos
       system("apachectl graceful > /dev/null 2>&1")
+      FileUtils.mkdir_p(VHOSTS_DIR)
       say "The installation of passify is complete."
     end
     
@@ -109,7 +110,7 @@ module Passify
     private
       # http://jimeh.me/blog/2010/02/22/built-in-sudo-for-ruby-command-line-tools/      
       def sudome
-        exec("#{sudo_command} #{ENV['_']} #{ARGV.join(' ')}") if ENV["USER"] != "root"
+        exec("#{sudo_command} passify #{ARGV.join(' ')}") if ENV["USER"] != "root"
       end
       
       def sudo_command
@@ -129,7 +130,11 @@ module Passify
       end
       
       def is_valid_app?
-        if is_rack_app? || is_rails2_app?
+        if is_rack_app?
+          FileUtils.mkdir_p('public')
+          FileUtils.mkdir_p('tmp')
+          true
+        elsif is_rails2_app?
           true
         else
           false

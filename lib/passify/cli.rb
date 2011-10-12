@@ -136,6 +136,8 @@ module Passify
           true
         elsif is_rails2_app?
           true
+        elsif is_legacy_app?
+          true
         else
           false
         end
@@ -147,6 +149,10 @@ module Passify
       
       def is_rails2_app?
         system("grep 'RAILS_GEM_VERSION' config/environment.rb > /dev/null 2>&1")
+      end
+      
+      def is_legacy_app?
+        File.exists?('index.html') || File.exists?('index.php')
       end
       
       def app_exists?(host)
@@ -184,6 +190,13 @@ module Passify
       end
       
       def create_vhost(host, path)
+        if is_legacy_app?
+        else
+          create_passenger_vhost(host, path)
+        end
+      end
+      
+      def create_passenger_vhost(host, path)
         create_file vhost_file(host), <<-eos
 <VirtualHost *:80>
   ServerName #{host}
@@ -193,6 +206,21 @@ module Passify
     Allow from all
     Options -MultiViews
   </Directory>
+</VirtualHost>
+          eos
+      end
+      
+      def create_legacy_vhost(host, path)
+        create_file vhost_file(host), <<-eos
+<VirtualHost *:80>
+  ServerName #{host}
+  DocumentRoot "#{path}"
+  
+  DirectoryIndex index.html index.php
+  <Directory "#{path}">
+    AllowOverride All
+  </Directory>  
+  PassengerEnabled off
 </VirtualHost>
           eos
       end

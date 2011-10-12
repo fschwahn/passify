@@ -28,7 +28,7 @@ module Passify
       sudome
       create_vhost(host, pwd)
       register_host(host)
-      system("apachectl graceful > /dev/null 2>&1")
+      restart_apache
       say "The application was successfully set up and can be reached from http://#{host} . Run `passify open #{name}` to view it."
     end
     
@@ -61,7 +61,7 @@ module Passify
   Include /private/etc/apache2/passenger_pane_vhosts/*.conf
 </IfModule>
         eos
-      system("apachectl graceful > /dev/null 2>&1")
+      restart_apache
       FileUtils.mkdir_p(VHOSTS_DIR)
       say "The installation of passify is complete."
     end
@@ -81,7 +81,7 @@ module Passify
       FileUtils.mkdir_p('tmp')
       system "touch tmp/restart.txt"
     end
-    
+
     desc "list", "Lists all applications served with passify."
     def list
       error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
@@ -219,7 +219,8 @@ module Passify
   
   DirectoryIndex index.html index.php
   <Directory "#{path}">
-    AllowOverride All
+    Allow from all
+    Options -MultiViews
   </Directory>  
   PassengerEnabled off
 </VirtualHost>
@@ -236,6 +237,10 @@ module Passify
       
       def unregister_host(host)
         system("/usr/bin/dscl localhost -delete /Local/Default/Hosts/#{host} > /dev/null 2>&1")
+      end
+      
+      def restart_apache
+        system("apachectl graceful > /dev/null 2>&1")
       end
       
   end

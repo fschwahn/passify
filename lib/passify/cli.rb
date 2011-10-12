@@ -220,7 +220,7 @@ module Passify
   DirectoryIndex index.html index.php
   <Directory "#{path}">
     Allow from all
-    Options -MultiViews
+    AllowOverride All
   </Directory>  
   PassengerEnabled off
 </VirtualHost>

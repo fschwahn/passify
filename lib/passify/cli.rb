@@ -191,6 +191,7 @@ module Passify
       
       def create_vhost(host, path)
         if is_legacy_app?
+          create_legacy_vhost(host, path)
         else
           create_passenger_vhost(host, path)
         end

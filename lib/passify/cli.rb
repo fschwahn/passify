@@ -44,6 +44,22 @@ module Passify
       unregister_host(host)
     end
     
+    desc "env", "Change the environment of the current app"
+    def env(name = nil, env = 'production')
+      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
+      name = File.basename(pwd) if name.nil? || name.empty?
+      name = urlify(name)
+      host = "#{name}.local"
+      notice("No application exists under http://#{host} .") unless app_exists?(host)
+      line_no, rack_env = `grep -n 'RackEnv' #{vhost_file(host)}`.split(":")
+      current_env = rack_env.strip.split(" ")[1]
+      notice("The application is already in '#{env}' environment.") if current_env == env
+      sudome
+      `sed -i '' '#{line_no}s!#{current_env}!#{env}!' #{vhost_file(host)}`
+      restart_apache
+      say "The application now runs in '#{env}' environment."
+    end
+    
     desc "install", "Installs passify into the local Apache installation."
     def install
       error("Passenger seems not to be installed. Refer to http://www.modrails.com/ for installation instructions.") unless passenger_installed?

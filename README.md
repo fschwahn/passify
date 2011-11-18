@@ -15,7 +15,7 @@ This is necessary to ensure that Apache is set up correctly. If Passenger and th
 
 The application name is optional, if none is provided `passify` creates the name from the current working directory. After creating an application it can be opened in the browser by running
 
-    passify open [name]
+    passify open
 
 To restart the application run
 
@@ -23,7 +23,15 @@ To restart the application run
 
 To remove the application run
 
-    passify remove [name]
+    passify remove
+
+To change the rack environment to e.g. production run
+
+    passify env production
+
+To show the current rack environment run
+
+    passify env
 
 A list of all applications served with `passify` can be viewed by running
 
@@ -43,6 +51,10 @@ It makes sense to create a wrapper for `passify` if you are using multiple versi
     rvm wrapper 1.8.7 --no-prefix passify
 
 ## Changelog
+### 0.2.0
+* create a `.passify` file to save the host
+* added `-h` and `-v` shortcuts
+
 ### 0.1.2
 * added env-command to change rack environment
 

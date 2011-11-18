@@ -6,58 +6,63 @@ module Passify
   class CLI < Thor
     include Thor::Actions
     
+    map '-h' => 'help'
+    map '-v' => 'version'
+    
     APACHE_CONF = '/etc/apache2/httpd.conf'
     VHOSTS_DIR = '/private/etc/apache2/passenger_pane_vhosts'
 
     desc "add", "Creates an application from the current working directory."
     def add(name = nil)
-      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
+      check_for_passify
       error("This directory can not be served with Passenger. Please create a `config.ru`-file.") unless is_valid_app?
       name = File.basename(pwd) if name.nil? || name.empty?
       name = urlify(name)
       host = "#{name}.local"
       if app_exists?(host)
         if is_same_app?(host, pwd)
-          notice("This directory is already being served from http://#{host}. Run `passify open #{name}` to view it.")
+          notice("This directory is already being served from http://#{host}. Run `passify open` to view it.")
         else
-          exit if no?("A different app already exists with under http://#{host}. Do you want to overwrite it?")
-          remove(name)
+          exit if no?("A different app already exists under http://#{host}. Do you want to overwrite it?")
+          sudome
+          remove_app(host)
         end
       end
       
+      silent_create_file ".passify", host
       sudome
       create_vhost(host, pwd)
       register_host(host)
       restart_apache
-      say "The application was successfully set up and can be reached from http://#{host} . Run `passify open #{name}` to view it."
+      say "The application was successfully set up and can be reached from http://#{host} . Run `passify open` to view it."
     end
     
     desc "remove", "Removes an existing link to the current working directory."
-    def remove(name = nil)
-      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
-      name = File.basename(pwd) if name.nil? || name.empty?
-      name = urlify(name)
-      host = "#{name}.local"
-      notice("No application exists under http://#{host} .") unless app_exists?(host)
+    def remove
+      check_for_passify
+      host = find_host
+      
       sudome
-      remove_file(vhost_file(host))
-      unregister_host(host)
+      remove_app(host)
+      say "The application was successfully removed."
     end
     
     desc "env", "Change the environment of the current app"
-    def env(name = nil, env = 'production')
-      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
-      name = File.basename(pwd) if name.nil? || name.empty?
-      name = urlify(name)
-      host = "#{name}.local"
-      notice("No application exists under http://#{host} .") unless app_exists?(host)
+    def env(env = nil)
+      check_for_passify
+      host = find_host
+      
       line_no, rack_env = `grep -n 'RackEnv' #{vhost_file(host)}`.split(":")
       current_env = rack_env.strip.split(" ")[1]
-      notice("The application is already in '#{env}' environment.") if current_env == env
-      sudome
-      `sed -i '' '#{line_no}s!#{current_env}!#{env}!' #{vhost_file(host)}`
-      restart_apache
-      say "The application now runs in '#{env}' environment."
+      if env.nil? || env.empty?
+        say "The application is running in '#{current_env}' environment."
+      else
+        notice("The application is already in '#{env}' environment.") if current_env == env
+        sudome
+        `sed -i '' '#{line_no}s!#{current_env}!#{env}!' #{vhost_file(host)}`
+        restart_apache
+        say "The application now runs in '#{env}' environment."
+      end
     end
     
     desc "install", "Installs passify into the local Apache installation."
@@ -100,7 +105,7 @@ module Passify
 
     desc "list", "Lists all applications served with passify."
     def list
-      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
+      check_for_passify
       Dir.foreach(VHOSTS_DIR) do |entry|
         if File.file?("#{VHOSTS_DIR}/#{entry}")
           host = entry[0..-12]
@@ -110,11 +115,10 @@ module Passify
     end
     
     desc "open", "Opens the current working directory in browser."
-    def open(name = nil)
-      error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
-      name = File.basename(pwd) if name.nil? || name.empty?
-      name = urlify(name)
-      host = "#{name}.local"
+    def open
+      check_for_passify
+      host = find_host
+      
       system("open http://#{host}")
     end
     
@@ -137,12 +141,23 @@ module Passify
         system("which rvm > /dev/null 2>&1")
       end
       
+      def check_for_passify
+        error("Passify is currently not installed. Please run `passify install` first.") unless passify_installed?
+      end
+      
       def passify_installed?
         system("grep 'Include \\/private\\/etc\\/apache2\\/passenger_pane_vhosts\\/\\*\\.conf' #{APACHE_CONF} > /dev/null 2>&1")
       end
       
       def passenger_installed?
         system("grep 'PassengerRuby' #{APACHE_CONF} > /dev/null 2>&1")
+      end
+      
+      def remove_app(host)
+        app_dir = directory_for_host(host)
+        remove_file(vhost_file(host), :verbose => false)
+        unregister_host(host)
+        remove_file("#{app_dir}/.passify", :verbose => false) if File.exists?("#{app_dir}/.passify")
       end
       
       def is_valid_app?
@@ -169,6 +184,18 @@ module Passify
       
       def is_legacy_app?
         File.exists?('index.html') || File.exists?('index.php')
+      end
+      
+      def find_host
+        if File.exists?('.passify')
+          host = File.open('.passify') {|f| f.readline}.strip
+        else # support for passify 0.1.x
+          name = File.basename(pwd)
+          name = urlify(name)
+          host = "#{name}.local"
+        end
+        notice("The current directory is not served via passify. Please run `passify add` first.") unless app_exists?(host)
+        host
       end
       
       def app_exists?(host)
@@ -214,7 +241,7 @@ module Passify
       end
       
       def create_passenger_vhost(host, path)
-        create_file vhost_file(host), <<-eos
+        silent_create_file vhost_file(host), <<-eos
 <VirtualHost *:80>
   ServerName #{host}
   DocumentRoot "#{path}/public"
@@ -228,7 +255,7 @@ module Passify
       end
       
       def create_legacy_vhost(host, path)
-        create_file vhost_file(host), <<-eos
+        silent_create_file vhost_file(host), <<-eos
 <VirtualHost *:80>
   ServerName #{host}
   DocumentRoot "#{path}"
@@ -257,6 +284,10 @@ module Passify
       
       def restart_apache
         system("apachectl graceful > /dev/null 2>&1")
+      end
+      
+      def silent_create_file(path, content)
+        create_file path, content, :verbose => false
       end
       
   end

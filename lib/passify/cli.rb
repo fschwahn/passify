@@ -15,7 +15,7 @@ module Passify
     desc "add", "Creates an application from the current working directory."
     def add(name = nil)
       check_for_passify
-      error("This directory can not be served with Passenger. Please create a `config.ru`-file.") unless is_valid_app?
+      error("This directory can not be served with passify. It has to be either a Rack application, a Rails 2.x application or a legacy (PHP/HTML) application.") unless is_valid_app?
       name = File.basename(pwd) if name.nil? || name.empty?
       name = urlify(name)
       host = "#{name}.local"

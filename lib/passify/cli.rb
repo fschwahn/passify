@@ -6,8 +6,12 @@ module Passify
   class CLI < Thor
     include Thor::Actions
     
-    map '-h' => 'help'
-    map '-v' => 'version'
+    map '-h'  => 'help'
+    map '-v'  => 'version'
+    map 'rm'  => 'remove'
+    map 'env' => 'environment'
+    map 'rr'  => 'restart'
+    map 'ls'  => 'list'
     
     APACHE_CONF = '/etc/apache2/httpd.conf'
     VHOSTS_DIR = '/private/etc/apache2/passenger_pane_vhosts'
@@ -47,8 +51,8 @@ module Passify
       say "The application was successfully removed."
     end
     
-    desc "env", "Change the environment of the current app"
-    def env(env = nil)
+    desc "environment", "Change the environment of the current app"
+    def environment(env = nil)
       check_for_passify
       notice("This application is a legacy application. The environment can not be changed.") if !is_rack_app? && !is_rails2_app?
       host = find_host

@@ -37,6 +37,10 @@ A list of all applications served with `passify` can be viewed by running
 
     passify list
 
+Open the configuration file for the current application if $EDITOR is set, otherwise show the path to the file.
+
+    passify conf
+
 Last but not least, `passify` can be removed from Apache by running
 
     passify uninstall
@@ -54,6 +58,7 @@ It makes sense to create a wrapper for `passify` if you are using multiple versi
 ### 0.2.2 (25-11-2011)
 * added conf command to which opens the configuration file if $EDITOR is set, and shows the path otherwise
 * fixed small bug with `list`-command showing truncated paths for legacy apps
+* added well known shortcuts for several commands
 
 ### 0.2.1 (25-11-2011)
 * fix crash when environment command is called on legacy app

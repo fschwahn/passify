@@ -123,6 +123,22 @@ module Passify
       system("open http://#{host}")
     end
     
+    desc "conf", "Opens the configuration file if $EDITOR is set, otherwise shows the path."
+    def conf
+      check_for_passify
+      host = find_host
+
+      success = false
+      if ENV['EDITOR']
+        Dir.chdir(VHOSTS_DIR) do
+          success = system("#{ENV['EDITOR']} #{vhost_file(host)}")
+        end
+      end
+      if !success
+        say vhost_file(host)
+      end
+    end
+    
     desc "version", "Shows the version"
     def version
        say "passify #{Passify::VERSION}"

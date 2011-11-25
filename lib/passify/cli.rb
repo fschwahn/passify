@@ -20,9 +20,7 @@ module Passify
     def add(name = nil)
       check_for_passify
       error("This directory can not be served with passify. It has to be either a Rack application, a Rails 2.x application or a legacy (PHP/HTML) application.") unless is_valid_app?
-      name = File.basename(pwd) if name.nil? || name.empty?
-      name = urlify(name)
-      host = "#{name}.local"
+      host = get_host_from_name(name)
       if app_exists?(host)
         if is_same_app?(host, pwd)
           notice("This directory is already being served from http://#{host}. Run `passify open` to view it.")
@@ -41,10 +39,10 @@ module Passify
       say "The application was successfully set up and can be reached from http://#{host} . Run `passify open` to view it."
     end
     
-    desc "remove", "Removes an existing link to the current working directory."
-    def remove
+    desc "remove", "Removes an existing application."
+    def remove(name = nil)
       check_for_passify
-      host = find_host
+      host = find_host(name)
       
       sudome
       remove_app(host)
@@ -114,7 +112,8 @@ module Passify
       Dir.foreach(VHOSTS_DIR) do |entry|
         if File.file?("#{VHOSTS_DIR}/#{entry}")
           host = entry[0..-12]
-          say "  #{host} --> #{directory_for_host(host)}"
+          dir = directory_for_host(host)
+          say "  #{host} --> #{Dir.exists?(dir) ? dir : "[REMOVED]"}"
         end
       end
     end
@@ -207,13 +206,13 @@ module Passify
         File.exists?("#{path}/index.html") || File.exists?("#{path}/index.php")
       end
       
-      def find_host
-        if File.exists?('.passify')
+      def find_host(name = nil)
+        if name
+          host = get_host_from_name(name)
+        elsif File.exists?('.passify')
           host = File.open('.passify') {|f| f.readline}.strip
         else # support for passify 0.1.x
-          name = File.basename(pwd)
-          name = urlify(name)
-          host = "#{name}.local"
+          host = get_host_from_name
         end
         notice("The current directory is not served via passify. Please run `passify add` first.") unless app_exists?(host)
         host
@@ -234,6 +233,12 @@ module Passify
       
       def find_line_in_conf(pattern)
         `grep -n '#{pattern}' #{APACHE_CONF}`.split(":").first
+      end
+      
+      def get_host_from_name(name = nil)
+        name = File.basename(pwd) if name.nil? || name.empty?
+        name = urlify(name)
+        "#{name}.local"
       end
       
       def pwd

@@ -23,7 +23,7 @@ To restart the application run
 
 To remove the application run
 
-    passify remove
+    passify remove [name]
 
 To change the rack environment to e.g. production run
 
@@ -55,6 +55,10 @@ It makes sense to create a wrapper for `passify` if you are using multiple versi
     rvm wrapper 1.8.7 --no-prefix passify
 
 ## Changelog
+### 0.2.3 (25-11-2011)
+* add possibility to remove hosts if the directory was already deleted
+* show in `ls`-command if application has been removed
+
 ### 0.2.2 (25-11-2011)
 * added conf command to which opens the configuration file if $EDITOR is set, and shows the path otherwise
 * fixed small bug with `list`-command showing truncated paths for legacy apps

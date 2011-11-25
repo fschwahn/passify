@@ -51,17 +51,20 @@ It makes sense to create a wrapper for `passify` if you are using multiple versi
     rvm wrapper 1.8.7 --no-prefix passify
 
 ## Changelog
-### 0.2.0
+### 0.2.1 (25-11-2011)
+* fix crash when environment command is called on legacy app
+
+### 0.2.0 (18-11-2011)
 * create a `.passify` file to save the host
 * added `-h` and `-v` shortcuts
 
-### 0.1.2
+### 0.1.2 (16-11-2011)
 * added env-command to change rack environment
 
-### 0.1.1
+### 0.1.1 (12-10-2011)
 * added support for legacy application
 
-### 0.1.0
+### 0.1.0 (27-08-2011)
 * initial release
 
 ## License

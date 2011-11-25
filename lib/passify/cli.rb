@@ -50,6 +50,7 @@ module Passify
     desc "env", "Change the environment of the current app"
     def env(env = nil)
       check_for_passify
+      notice("This application is a legacy application. The environment can not be changed.") if !is_rack_app? && !is_rails2_app?
       host = find_host
       
       line_no, rack_env = `grep -n 'RackEnv' #{vhost_file(host)}`.split(":")

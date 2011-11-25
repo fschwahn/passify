@@ -191,16 +191,16 @@ module Passify
         end
       end
       
-      def is_rack_app?
-        File.exists?('config.ru')
+      def is_rack_app?(path = pwd)
+        File.exists?("#{path}/config.ru")
       end
       
-      def is_rails2_app?
-        system("grep 'RAILS_GEM_VERSION' config/environment.rb > /dev/null 2>&1")
+      def is_rails2_app?(path = pwd)
+        system("grep 'RAILS_GEM_VERSION' #{path}/config/environment.rb > /dev/null 2>&1")
       end
       
-      def is_legacy_app?
-        File.exists?('index.html') || File.exists?('index.php')
+      def is_legacy_app?(path = pwd)
+        File.exists?("#{path}/index.html") || File.exists?("#{path}/index.php")
       end
       
       def find_host
@@ -224,7 +224,8 @@ module Passify
       end
       
       def directory_for_host(host)
-        `grep 'DocumentRoot' #{vhost_file(host)}`.scan(/"([^"]*)"/).flatten[0][0..-8]
+        dir = `grep 'DocumentRoot' #{vhost_file(host)}`.scan(/"([^"]*)"/).flatten[0]
+        is_legacy_app?(dir) ? dir : dir[0..-8]
       end
       
       def find_line_in_conf(pattern)

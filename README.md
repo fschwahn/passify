@@ -53,6 +53,7 @@ It makes sense to create a wrapper for `passify` if you are using multiple versi
 ## Changelog
 ### 0.2.2 (25-11-2011)
 * added conf command to which opens the configuration file if $EDITOR is set, and shows the path otherwise
+* fixed small bug with `list`-command showing truncated paths for legacy apps
 
 ### 0.2.1 (25-11-2011)
 * fix crash when environment command is called on legacy app
